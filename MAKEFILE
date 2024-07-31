@@ -1,0 +1,62 @@
+#
+# Makefile for etherdfs, requires Open Watcom v1.9
+# Copyright (C) 2017 Mateusz Viste
+#
+# http://etherdfs.sourceforge.net
+#
+
+!ifeq TARGET PC9821
+FLAGS=-d__PC9821__
+ADD=_pc98
+EXENAME=edfs3p98
+!else ifeq TARGET FMTOWNS
+FLAGS=-d__FMTOWNS__
+ADD=_fmt
+EXENAME=edfs3fmt
+!else
+EXENAME=etherdfs
+!endif
+
+all: $(EXENAME).exe
+
+genmsg$(ADD).exe: genmsg.c version.h
+	wcl -y -0 -s -d0 -lr -ms -we -os genmsg.c -fe=genmsg$(ADD).exe $(FLAGS)
+
+chint.obj: chint086.asm
+	wasm -0 chint086.asm -fo=chint.obj -ms
+
+$(EXENAME).exe: genmsg$(ADD).exe etherdfs.c chint.obj dosstruc.h globals.h version.h
+	if not exist msg md msg
+	msdos genmsg$(ADD).exe
+	wcl -y -0 -s -d0 -lr -ms -we -k1024 -fm=$(EXENAME).map -os chint.obj etherdfs.c -fe=$(EXENAME).exe $(FLAGS)
+	upx -9 --8086 $(EXENAME).exe
+	
+instchk.exe: genmsg$(ADD).exe dosstruc.h globals.h version.h
+	if not exist msg md msg
+	msdos genmsg$(ADD).exe
+	wcl -y -0 -s -d0 -lr -ms -we -k1024 -fm=instchk$(ADD).map -os instchk.c -fe=instchk$(ADD).exe $(FLAGS)
+
+# -y      ignore the WCL env. variable, if any
+# -0      generate code for 8086
+# -s      disable stack overflow checks
+# -d0     don't include debugging information
+# -lr     compile to a DOS real-mode application
+# -ms     small memory model
+# -we     treat all warnings as errors
+# -wx     set warning level to max
+# -k1024  set stack size to 1024 bytes (for the non-resident part)
+# -fm=    generate a map file
+# -os     optimize for size
+# -fe     set output file name
+
+clean: .symbolic
+	if exist $(ALIAE).exe del $(ALIAS).exe
+	if exist $(EXENAME).exe del $(EXENAME).exe
+	if exist genmsg$(ADD).exe del genmsg$(ADD).exe
+	del *.obj
+
+pkg: .symbolic $(EXENAME).exe
+	if exist $(EXENAME).zip del $(EXENAME).zip
+	zip -9 -k $(EXENAME).zip $(EXENAME).exe etherdfs.txt history.txt
+	if exist ethersrc.zip del ethersrc.zip
+	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt makefile
